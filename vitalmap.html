@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VitalMap — Seu Painel de Vitalidade</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080810;
+  --surface:#0F0F1A;
+  --card:#141422;
+  --border:#1E1E32;
+  --lime:#A8E063;
+  --lime-dim:#6A9A35;
+  --lime-glow:rgba(168,224,99,0.15);
+  --gold:#C8A96E;
+  --gold-dim:#7A5F30;
+  --text:#E8E8F0;
+  --muted:#6B6B88;
+  --danger:#E05555;
+  --warn:#E09840;
+  --r:16px;
+}
+html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+/* ── Noise texture overlay ── */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4}
+
+#app{position:relative;z-index:1;max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:100px}
+
+/* ── Screens ── */
+.screen{display:none;padding:0 20px}
+.screen.active{display:block}
+
+/* ══════════════════════════════
+   ONBOARDING
+══════════════════════════════ */
+#s-onboard{padding:40px 24px 0;display:none;flex-direction:column;align-items:center;text-align:center;min-height:100vh}
+#s-onboard.active{display:flex}
+
+.orb-intro{
+  width:160px;height:160px;border-radius:50%;
+  background:radial-gradient(circle at 38% 35%, #C8FFB0, #A8E063 40%, #4A8A15 80%, #1A3A05);
+  box-shadow:0 0 60px rgba(168,224,99,.4), 0 0 120px rgba(168,224,99,.15);
+  margin-bottom:36px;
+  animation:orbPulse 3s ease-in-out infinite;
+}
+@keyframes orbPulse{
+  0%,100%{transform:scale(1);box-shadow:0 0 60px rgba(168,224,99,.4),0 0 120px rgba(168,224,99,.15)}
+  50%{transform:scale(1.06);box-shadow:0 0 80px rgba(168,224,99,.6),0 0 160px rgba(168,224,99,.25)}
+}
+
+.brand{font-size:11px;font-weight:600;letter-spacing:.18em;color:var(--lime);text-transform:uppercase;margin-bottom:12px}
+.headline{font-family:'Syne',sans-serif;font-size:32px;line-height:1.15;color:var(--text);margin-bottom:16px}
+.headline em{font-style:normal;color:var(--lime)}
+.lead{font-size:15px;line-height:1.7;color:var(--muted);margin-bottom:40px}
+
+.axes-preview{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:100%;margin-bottom:40px}
+.axis-chip{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:12px 8px;
+  display:flex;flex-direction:column;align-items:center;gap:6px
+}
+.axis-chip .ic{font-size:20px}
+.axis-chip .lb{font-size:11px;color:var(--muted);font-weight:500}
+
+.name-input{
+  width:100%;padding:16px 18px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--r);color:var(--text);font-family:'DM Sans',sans-serif;
+  font-size:16px;outline:none;margin-bottom:12px;
+  transition:border-color .2s
+}
+.name-input:focus{border-color:var(--lime)}
+.name-input::placeholder{color:var(--muted)}
+
+.sex-row{display:flex;gap:10px;width:100%;margin-bottom:28px}
+.sex-btn{
+  flex:1;padding:13px;border-radius:var(--r);
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;
+  cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent
+}
+.sex-btn.sel{border-color:var(--lime);color:var(--lime);background:rgba(168,224,99,.07)}
+
+.btn-go{
+  width:100%;padding:17px;border-radius:var(--r);
+  background:var(--lime);color:#080810;
+  font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;
+  border:none;cursor:pointer;transition:transform .1s,opacity .1s;
+  -webkit-tap-highlight-color:transparent
+}
+.btn-go:disabled{opacity:.35;cursor:default}
+.btn-go:not(:disabled):active{transform:scale(.98)}
+
+/* ══════════════════════════════
+   ASSESSMENT
+══════════════════════════════ */
+#s-assess{padding-top:0}
+
+.assess-header{
+  position:sticky;top:0;z-index:10;
+  background:rgba(8,8,16,.92);backdrop-filter:blur(12px);
+  padding:16px 20px 14px;border-bottom:1px solid var(--border)
+}
+.assess-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.assess-title{font-family:'Syne',sans-serif;font-size:18px;color:var(--text)}
+.score-live{
+  display:flex;align-items:center;gap:6px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:6px 12px
+}
+.score-live .val{font-family:'Syne',sans-serif;font-size:18px;color:var(--lime)}
+.score-live .lbl{font-size:11px;color:var(--muted)}
+.prog-track{height:2px;background:var(--border);border-radius:1px}
+.prog-fill{height:100%;background:var(--lime);border-radius:1px;transition:width .4s ease}
+
+.axis-block{padding:24px 20px;border-bottom:1px solid var(--border)}
+.axis-head{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.axis-icon{font-size:22px}
+.axis-name{font-family:'Syne',sans-serif;font-size:16px;color:var(--text)}
+.axis-score-badge{
+  margin-left:auto;font-size:12px;font-weight:600;
+  padding:4px 10px;border-radius:20px;
+  background:rgba(168,224,99,.1);color:var(--lime)
+}
+
+.marker{margin-bottom:22px}
+.marker:last-child{margin-bottom:0}
+.marker-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.marker-label{font-size:14px;color:var(--text);font-weight:500}
+.marker-val{
+  font-family:'Syne',sans-serif;font-size:22px;
+  min-width:40px;text-align:right;
+  transition:color .3s
+}
+.marker-desc{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+
+.slider-wrap{position:relative}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:44px;background:transparent;cursor:pointer;
+  -webkit-tap-highlight-color:transparent
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:4px;background:var(--border);border-radius:2px
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:26px;height:26px;border-radius:50%;
+  background:var(--lime);border:3px solid var(--bg);
+  margin-top:-11px;
+  box-shadow:0 0 12px rgba(168,224,99,.5);
+  transition:box-shadow .15s
+}
+input[type=range]:active::-webkit-slider-thumb{box-shadow:0 0 20px rgba(168,224,99,.7)}
+input[type=range]::-moz-range-track{height:4px;background:var(--border);border-radius:2px}
+input[type=range]::-moz-range-thumb{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--lime);border:3px solid var(--bg);
+  box-shadow:0 0 12px rgba(168,224,99,.5)
+}
+.slider-labels{display:flex;justify-content:space-between;margin-top:2px}
+.slider-labels span{font-size:10px;color:var(--muted)}
+
+.track-fill{
+  position:absolute;top:50%;left:0;transform:translateY(-50%);
+  height:4px;border-radius:2px;pointer-events:none;
+  background:var(--lime);transition:width .1s
+}
+
+.assess-footer{padding:20px;position:sticky;bottom:0;background:rgba(8,8,16,.95);backdrop-filter:blur(12px)}
+.btn-result{
+  width:100%;padding:17px;border-radius:var(--r);
+  background:var(--lime);color:#080810;
+  font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;
+  border:none;cursor:pointer;transition:transform .1s,opacity .1s;
+  -webkit-tap-highlight-color:transparent
+}
+.btn-result:disabled{opacity:.35;cursor:default}
+.btn-result:not(:disabled):active{transform:scale(.98)}
+
+/* ══════════════════════════════
+   DASHBOARD
+══════════════════════════════ */
+#s-dash{padding-top:0}
+
+.dash-header{
+  position:sticky;top:0;z-index:10;
+  background:rgba(8,8,16,.92);backdrop-filter:blur(12px);
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between
+}
+.dash-name{font-family:'Syne',sans-serif;font-size:18px}
+.btn-redo{
+  font-size:12px;color:var(--muted);background:var(--card);
+  border:1px solid var(--border);border-radius:20px;
+  padding:6px 14px;cursor:pointer;font-family:'DM Sans',sans-serif;
+  -webkit-tap-highlight-color:transparent
+}
+
+/* Hero orb */
+.orb-section{
+  display:flex;flex-direction:column;align-items:center;
+  padding:36px 20px 28px
+}
+.orb-container{position:relative;width:200px;height:200px;margin-bottom:20px}
+.orb{
+  width:200px;height:200px;border-radius:50%;
+  animation:orbPulse 3s ease-in-out infinite;
+  transition:background 1s, box-shadow 1s
+}
+.orb-ring{
+  position:absolute;inset:-16px;border-radius:50%;
+  border:1px solid rgba(168,224,99,.2);
+  animation:ringPulse 3s ease-in-out infinite
+}
+.orb-ring2{
+  position:absolute;inset:-32px;border-radius:50%;
+  border:1px solid rgba(168,224,99,.08);
+  animation:ringPulse 3s ease-in-out infinite .5s
+}
+@keyframes ringPulse{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.04);opacity:1}}
+
+.orb-score{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center
+}
+.orb-score .num{font-family:'Syne',sans-serif;font-size:52px;font-weight:800;line-height:1}
+.orb-score .den{font-size:14px;color:var(--muted);font-weight:300}
+
+.vitality-label{font-family:'Syne',sans-serif;font-size:22px;text-align:center;margin-bottom:6px}
+.vitality-sub{font-size:13px;color:var(--muted);text-align:center;line-height:1.6}
+
+/* Histórico */
+.history-strip{
+  display:flex;gap:8px;overflow-x:auto;
+  padding:0 20px 4px;margin-bottom:4px;
+  scrollbar-width:none
+}
+.history-strip::-webkit-scrollbar{display:none}
+.hist-chip{
+  flex-shrink:0;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:10px 14px;text-align:center;min-width:64px
+}
+.hist-chip.active{border-color:var(--lime)}
+.hist-chip .hd{font-size:10px;color:var(--muted);margin-bottom:4px}
+.hist-chip .hs{font-family:'Syne',sans-serif;font-size:18px}
+
+/* Eixos radar */
+.axes-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px;margin-bottom:24px}
+.axis-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;padding:16px;
+  position:relative;overflow:hidden
+}
+.axis-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;
+  height:3px;border-radius:0 0 14px 14px;
+  background:var(--lime);
+  transition:opacity .3s
+}
+.axis-card .ac-icon{font-size:24px;margin-bottom:8px}
+.axis-card .ac-name{font-size:12px;color:var(--muted);margin-bottom:4px}
+.axis-card .ac-score{font-family:'Syne',sans-serif;font-size:28px}
+.axis-card .ac-bar{
+  height:3px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden
+}
+.axis-card .ac-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1)}
+
+/* Insights */
+.section-label{
+  font-size:11px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);
+  padding:0 20px;margin-bottom:12px
+}
+.insights{display:flex;flex-direction:column;gap:8px;padding:0 20px;margin-bottom:28px}
+.insight{
+  display:flex;align-items:flex-start;gap:12px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px
+}
+.insight-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.insight-text{font-size:14px;line-height:1.55;color:var(--text)}
+.insight-text small{color:var(--muted);font-size:12px;display:block;margin-top:2px}
+
+/* CTA */
+.cta-section{
+  margin:0 20px;
+  background:linear-gradient(135deg,rgba(168,224,99,.1),rgba(168,224,99,.03));
+  border:1px solid rgba(168,224,99,.25);
+  border-radius:18px;padding:24px
+}
+.cta-section .brand{text-align:left;margin-bottom:10px}
+.cta-section h3{font-family:'Syne',sans-serif;font-size:20px;margin-bottom:8px}
+.cta-section p{font-size:14px;color:var(--muted);line-height:1.65;margin-bottom:20px}
+.btn-wa{
+  width:100%;padding:16px;border-radius:var(--r);
+  background:#25D366;color:#fff;
+  font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  text-decoration:none;-webkit-tap-highlight-color:transparent;
+  transition:filter .15s
+}
+.btn-wa:active{filter:brightness(.9)}
+
+.disclaimer{font-size:11px;color:var(--muted);text-align:center;line-height:1.6;padding:20px 24px 0}
+
+/* ── Transitions ── */
+.screen{opacity:0;transform:translateY(10px);transition:opacity .3s ease,transform .3s ease}
+.screen.active{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ════════════════ ONBOARDING ════════════════ -->
+<div class="screen" id="s-onboard">
+  <div class="orb-intro" id="orb-intro"></div>
+  <p class="brand">VitalMap</p>
+  <h1 class="headline">Seu mapa de<br><em>energia real.</em></h1>
+  <p class="lead">Mapeie 6 eixos de vitalidade, veja onde está perdendo desempenho e acompanhe sua evolução ao longo do tempo.</p>
+
+  <div class="axes-preview">
+    <div class="axis-chip"><span class="ic">⚡</span><span class="lb">Energia</span></div>
+    <div class="axis-chip"><span class="ic">🌙</span><span class="lb">Sono</span></div>
+    <div class="axis-chip"><span class="ic">🧠</span><span class="lb">Mente</span></div>
+    <div class="axis-chip"><span class="ic">💪</span><span class="lb">Corpo</span></div>
+    <div class="axis-chip"><span class="ic">🎯</span><span class="lb">Humor</span></div>
+    <div class="axis-chip"><span class="ic">🔄</span><span class="lb">Recuperação</span></div>
+  </div>
+
+  <input class="name-input" id="user-name" type="text" placeholder="Como posso te chamar?" maxlength="24" oninput="checkOnboard()">
+  <div class="sex-row">
+    <button class="sex-btn" id="sb-m" onclick="setSex('M')">Homem</button>
+    <button class="sex-btn" id="sb-f" onclick="setSex('F')">Mulher</button>
+    <button class="sex-btn" id="sb-o" onclick="setSex('O')">Prefiro não dizer</button>
+  </div>
+  <button class="btn-go" id="btn-go" disabled onclick="goAssess()">Mapear minha vitalidade →</button>
+</div>
+
+<!-- ════════════════ ASSESSMENT ════════════════ -->
+<div class="screen" id="s-assess">
+  <div class="assess-header">
+    <div class="assess-top">
+      <span class="assess-title">Mapeamento</span>
+      <div class="score-live"><span class="val" id="live-score">0</span><span class="lbl">&nbsp;/&nbsp;100</span></div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  </div>
+
+  <div id="axes-wrap"></div>
+
+  <div class="assess-footer">
+    <button class="btn-result" id="btn-result" disabled onclick="showDash()">Ver meu VitalMap →</button>
+  </div>
+</div>
+
+<!-- ════════════════ DASHBOARD ════════════════ -->
+<div class="screen" id="s-dash">
+  <div class="dash-header">
+    <span class="dash-name" id="dash-name">—</span>
+    <button class="btn-redo" onclick="redoAssess()">Refazer ↻</button>
+  </div>
+
+  <div class="orb-section">
+    <div class="orb-container">
+      <div class="orb-ring2"></div>
+      <div class="orb-ring"></div>
+      <div class="orb" id="dash-orb"></div>
+      <div class="orb-score">
+        <div class="num" id="orb-num">0</div>
+        <div class="den">/100</div>
+      </div>
+    </div>
+    <h2 class="vitality-label" id="vitality-label">—</h2>
+    <p class="vitality-sub" id="vitality-sub">—</p>
+  </div>
+
+  <div class="history-strip" id="history-strip"></div>
+
+  <div style="margin-bottom:20px"></div>
+  <p class="section-label">Seus 6 eixos</p>
+  <div class="axes-grid" id="axes-grid"></div>
+
+  <div style="margin-bottom:20px"></div>
+  <p class="section-label">Pontos de atenção</p>
+  <div class="insights" id="insights"></div>
+
+  <div class="cta-section">
+    <p class="brand">Próximo passo</p>
+    <h3 id="cta-title">Investigação personalizada</h3>
+    <p id="cta-body">Leve seu VitalMap para a consulta e entenda o que está por trás dos seus números.</p>
+    <a class="btn-wa" id="btn-wa" href="#" target="_blank">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Falar com a equipe do Dr. Kleiner
+    </a>
+  </div>
+  <p class="disclaimer">VitalMap é uma ferramenta de autoconhecimento. Não substitui avaliação médica. © Dr. Kleiner Pinheiro — INGOH</p>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ══════════════════════════════════════════════
+// DADOS
+// ══════════════════════════════════════════════
+const AXES = [
+  {
+    id:'energia', icon:'⚡', name:'Energia',
+    color:'#A8E063',
+    markers:[
+      {id:'disp', label:'Disposição geral', desc:'Como você se sente ao longo do dia, de manhã até o fim da tarde.'},
+      {id:'cras', label:'Ausência de crashes', desc:'Quedas bruscas de energia à tarde ou após refeições.'},
+      {id:'vont', label:'Vontade de fazer coisas', desc:'Motivação intrínseca para atividades que você gosta.'},
+    ]
+  },
+  {
+    id:'sono', icon:'🌙', name:'Sono',
+    color:'#8B9EE0',
+    markers:[
+      {id:'qual', label:'Qualidade do sono', desc:'Você acorda sentindo que descansou de verdade?'},
+      {id:'cont', label:'Continuidade', desc:'Acorda várias vezes ou dorme sem interrupções?'},
+      {id:'temp', label:'Tempo de adormecer', desc:'Leva muito tempo para pegar no sono?'},
+    ]
+  },
+  {
+    id:'mente', icon:'🧠', name:'Mente',
+    color:'#C8A96E',
+    markers:[
+      {id:'foco', label:'Foco e concentração', desc:'Consegue manter atenção em uma tarefa por tempo prolongado?'},
+      {id:'memo', label:'Memória de curto prazo', desc:'Esquecer compromissos, palavras ou onde deixou objetos.'},
+      {id:'deci', label:'Clareza para decidir', desc:'Tomar decisões sem hesitação excessiva ou sobrecarga.'},
+    ]
+  },
+  {
+    id:'corpo', icon:'💪', name:'Corpo',
+    color:'#E07070',
+    markers:[
+      {id:'forca', label:'Força e resistência', desc:'Percebe perda de força ou dificuldade em manter a musculatura?'},
+      {id:'comp', label:'Composição corporal', desc:'Gordura abdominal acumulando mesmo sem mudança na rotina?'},
+      {id:'libi', label:'Libido', desc:'Desejo sexual em relação ao seu histórico pessoal.'},
+    ]
+  },
+  {
+    id:'humor', icon:'🎯', name:'Humor',
+    color:'#E0A840',
+    markers:[
+      {id:'estab', label:'Estabilidade emocional', desc:'Mudanças de humor, irritabilidade sem motivo claro.'},
+      {id:'ansi', label:'Ausência de ansiedade', desc:'Estado de alerta ou preocupação constante sem causa real.'},
+      {id:'moti', label:'Motivação e propósito', desc:'Sensação de que as coisas têm sentido e valem o esforço.'},
+    ]
+  },
+  {
+    id:'recup', icon:'🔄', name:'Recuperação',
+    color:'#60C8A8',
+    markers:[
+      {id:'exer', label:'Recuperação pós-exercício', desc:'Dor muscular intensa ou cansaço prolongado após treinar?'},
+      {id:'estrs', label:'Resiliência ao estresse', desc:'Como você volta ao estado normal após situações de pressão?'},
+      {id:'imun', label:'Imunidade', desc:'Gripes frequentes, infecções repetidas ou cicatrização lenta?'},
+    ]
+  },
+];
+
+// ══════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════
+let userName = '';
+let userSex = '';
+let scores = {}; // {axisId: {markerId: value 0-10}}
+let answered = 0;
+const TOTAL_MARKERS = AXES.reduce((s,a)=>s+a.markers.length,0);
+
+// Storage helpers
+function saveState(scoreObj){
+  const history = JSON.parse(localStorage.getItem('vm_history')||'[]');
+  history.unshift({date:new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}), scores:scoreObj, total:calcTotal(scoreObj)});
+  if(history.length>5) history.length=5;
+  localStorage.setItem('vm_history', JSON.stringify(history));
+  localStorage.setItem('vm_name', userName);
+  localStorage.setItem('vm_sex', userSex);
+}
+function loadName(){ return localStorage.getItem('vm_name')||''; }
+function loadHistory(){ return JSON.parse(localStorage.getItem('vm_history')||'[]'); }
+
+// ══════════════════════════════════════════════
+// CÁLCULO
+// ══════════════════════════════════════════════
+function calcAxisScore(axisId, sc){
+  const ax = AXES.find(a=>a.id===axisId);
+  const vals = ax.markers.map(m=>(sc[axisId]&&sc[axisId][m.id]!=null)?sc[axisId][m.id]:0);
+  return Math.round(vals.reduce((s,v)=>s+v,0)/ax.markers.length);
+}
+function calcTotal(sc){
+  const axScores = AXES.map(a=>calcAxisScore(a.id,sc));
+  return Math.round(axScores.reduce((s,v)=>s+v,0)/AXES.length);
+}
+function countAnswered(sc){
+  let n=0;
+  AXES.forEach(ax=>ax.markers.forEach(m=>{ if(sc[ax.id]&&sc[ax.id][m.id]!=null) n++; }));
+  return n;
+}
+
+// ══════════════════════════════════════════════
+// ONBOARDING
+// ══════════════════════════════════════════════
+function setSex(s){
+  userSex=s;
+  ['M','F','O'].forEach(x=>document.getElementById('sb-'+x.toLowerCase()).classList.remove('sel'));
+  document.getElementById('sb-'+s.toLowerCase()).classList.add('sel');
+  checkOnboard();
+}
+function checkOnboard(){
+  userName=document.getElementById('user-name').value.trim();
+  document.getElementById('btn-go').disabled=!(userName&&userSex);
+}
+function goAssess(){
+  show('s-assess');
+  renderAxes();
+}
+
+// ══════════════════════════════════════════════
+// ASSESSMENT
+// ══════════════════════════════════════════════
+function renderAxes(){
+  const wrap=document.getElementById('axes-wrap');
+  wrap.innerHTML='';
+  AXES.forEach(ax=>{
+    const block=document.createElement('div');
+    block.className='axis-block';
+    block.innerHTML=`
+      <div class="axis-head">
+        <span class="axis-icon">${ax.icon}</span>
+        <span class="axis-name">${ax.name}</span>
+        <span class="axis-score-badge" id="ab-${ax.id}">0</span>
+      </div>
+      ${ax.markers.map(m=>`
+        <div class="marker">
+          <div class="marker-top">
+            <span class="marker-label">${m.label}</span>
+            <span class="marker-val" id="mv-${ax.id}-${m.id}" style="color:var(--muted)">—</span>
+          </div>
+          <p class="marker-desc">${m.desc}</p>
+          <div class="slider-wrap">
+            <input type="range" min="0" max="100" value="50" step="1"
+              id="sl-${ax.id}-${m.id}"
+              oninput="onSlider('${ax.id}','${m.id}',this.value,this)"
+              onchange="onSliderCommit('${ax.id}','${m.id}',this.value)">
+          </div>
+          <div class="slider-labels"><span>Muito ruim</span><span>Ótimo</span></div>
+        </div>
+      `).join('')}
+    `;
+    wrap.appendChild(block);
+  });
+
+  // inicializar todos como "não tocado"
+  AXES.forEach(ax=>ax.markers.forEach(m=>{
+    if(!scores[ax.id]) scores[ax.id]={};
+  }));
+}
+
+function onSlider(axId, mId, val, el){
+  val=parseInt(val);
+  const col = valToColor(val);
+  document.getElementById('mv-'+axId+'-'+mId).textContent=val;
+  document.getElementById('mv-'+axId+'-'+mId).style.color=col;
+  updateTrack(el, val, col);
+}
+
+function onSliderCommit(axId, mId, val){
+  val=parseInt(val);
+  if(!scores[axId]) scores[axId]={};
+  const wasNull = scores[axId][mId]==null;
+  scores[axId][mId]=val;
+  if(wasNull){ answered++; }
+
+  const axScore=calcAxisScore(axId,scores);
+  document.getElementById('ab-'+axId).textContent=axScore;
+  document.getElementById('ab-'+axId).style.color=valToColor(axScore);
+
+  const total=calcTotal(scores);
+  document.getElementById('live-score').textContent=total;
+  document.getElementById('prog').style.width=(answered/TOTAL_MARKERS*100)+'%';
+
+  document.getElementById('btn-result').disabled=(answered<TOTAL_MARKERS);
+}
+
+function updateTrack(el, val, col){
+  let fill=el.parentElement.querySelector('.track-fill');
+  if(!fill){fill=document.createElement('div');fill.className='track-fill';el.parentElement.appendChild(fill);}
+  fill.style.width=val+'%';
+  fill.style.background=col;
+}
+
+function valToColor(v){
+  if(v>=70) return '#A8E063';
+  if(v>=45) return '#C8A96E';
+  return '#E05555';
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+function showDash(){
+  saveState(scores);
+  buildDash(scores);
+  show('s-dash');
+}
+
+function buildDash(sc){
+  const total=calcTotal(sc);
+
+  // Nome
+  document.getElementById('dash-name').textContent=userName;
+
+  // Orb
+  const orb=document.getElementById('dash-orb');
+  let orbGrad, orbGlow;
+  if(total>=70){
+    orbGrad=`radial-gradient(circle at 38% 35%, #C8FFB0, #A8E063 40%, #4A8A15 80%, #1A3A05)`;
+    orbGlow=`0 0 60px rgba(168,224,99,.5),0 0 120px rgba(168,224,99,.2)`;
+  } else if(total>=45){
+    orbGrad=`radial-gradient(circle at 38% 35%, #FFE8A0, #C8A96E 40%, #7A5F30 80%, #3A2A10)`;
+    orbGlow=`0 0 60px rgba(200,169,110,.5),0 0 120px rgba(200,169,110,.2)`;
+  } else {
+    orbGrad=`radial-gradient(circle at 38% 35%, #FFAAAA, #E05555 40%, #8A2020 80%, #3A0A0A)`;
+    orbGlow=`0 0 60px rgba(224,85,85,.5),0 0 120px rgba(224,85,85,.2)`;
+  }
+  orb.style.background=orbGrad;
+  orb.style.boxShadow=orbGlow;
+
+  // Número animado
+  animateNum('orb-num',0,total,1200);
+
+  // Label vitalidade
+  let vLabel,vSub;
+  if(total>=80){vLabel='Vitalidade Alta';vSub='Seu organismo está respondendo bem. Continue assim e monitore de perto.';}
+  else if(total>=60){vLabel='Vitalidade Moderada';vSub='Há espaço real para ganho de desempenho. Alguns eixos precisam de atenção.';}
+  else if(total>=40){vLabel='Vitalidade Comprometida';vSub='Sinais de desequilíbrio em múltiplos eixos. Vale investigar as causas.';}
+  else{vLabel='Vitalidade Baixa';vSub='Seu corpo está pedindo atenção. Investigação e protocolo são prioritários agora.';}
+  document.getElementById('vitality-label').textContent=vLabel;
+  document.getElementById('vitality-sub').textContent=vSub;
+
+  // Histórico
+  const hist=loadHistory();
+  const strip=document.getElementById('history-strip');
+  strip.innerHTML=hist.map((h,i)=>`
+    <div class="hist-chip ${i===0?'active':''}">
+      <div class="hd">${h.date}</div>
+      <div class="hs" style="color:${valToColor(h.total)}">${h.total}</div>
+    </div>
+  `).join('');
+
+  // Eixos grid
+  const grid=document.getElementById('axes-grid');
+  grid.innerHTML=AXES.map(ax=>{
+    const s=calcAxisScore(ax.id,sc);
+    const col=ax.color;
+    return `
+      <div class="axis-card" style="border-bottom:3px solid ${col}20">
+        <div class="ac-icon">${ax.icon}</div>
+        <div class="ac-name">${ax.name}</div>
+        <div class="ac-score" style="color:${col}">${s}</div>
+        <div class="ac-bar"><div class="ac-fill" style="width:0%;background:${col}" data-w="${s}"></div></div>
+      </div>
+    `;
+  }).join('');
+  setTimeout(()=>{
+    document.querySelectorAll('.ac-fill').forEach(el=>{el.style.width=el.dataset.w+'%';});
+  },100);
+
+  // Insights
+  const axScores=AXES.map(ax=>({ax,s:calcAxisScore(ax.id,sc)})).sort((a,b)=>a.s-b.s);
+  const worst=axScores.slice(0,2);
+  const best=axScores.slice(-1);
+
+  const insightEl=document.getElementById('insights');
+  insightEl.innerHTML='';
+
+  worst.forEach(({ax,s})=>{
+    const ins=document.createElement('div');
+    ins.className='insight';
+    const col=s<45?'var(--danger)':'var(--warn)';
+    ins.innerHTML=`
+      <div class="insight-dot" style="background:${col}"></div>
+      <div class="insight-text">
+        ${ax.icon} <strong>${ax.name}</strong> está com score ${s} — seu eixo mais crítico no momento.
+        <small>${insightText(ax.id,s)}</small>
+      </div>`;
+    insightEl.appendChild(ins);
+  });
+
+  best.forEach(({ax,s})=>{
+    const ins=document.createElement('div');
+    ins.className='insight';
+    ins.innerHTML=`
+      <div class="insight-dot" style="background:var(--lime)"></div>
+      <div class="insight-text">
+        ${ax.icon} <strong>${ax.name}</strong> é seu ponto forte (${s}). Bom sinal para sustentar os outros eixos.
+        <small>Continue o que está funcionando aqui.</small>
+      </div>`;
+    insightEl.appendChild(ins);
+  });
+
+  // CTA dinâmico
+  const ctaTitle = total<50 ? 'Seu VitalMap pede investigação.' : 'Quer entender o que está por trás dos números?';
+  const ctaBody  = total<50
+    ? 'Scores abaixo de 50 em múltiplos eixos geralmente têm causa hormonal tratável. Leve esse mapa para uma conversa com o Dr. Kleiner.'
+    : 'Mesmo com boa vitalidade, uma avaliação hormonal completa pode revelar ajustes finos que fazem diferença real no longo prazo.';
+  document.getElementById('cta-title').textContent=ctaTitle;
+  document.getElementById('cta-body').textContent=ctaBody;
+
+  const waMsg=encodeURIComponent(`Olá, fiz o VitalMap e meu score de vitalidade foi ${total}/100 (${vLabel}). Meus eixos mais críticos são ${worst.map(w=>w.ax.name).join(' e ')}. Gostaria de entender melhor meu resultado.`);
+document.getElementById('btn-wa').href=`https://wa.me/5562982940708?text=${waMsg}&phone=Integra%20Ingoh`;
+}
+
+function insightText(axId, score){
+  const map={
+    energia:'Pode indicar cortisol desregulado, vitamina D baixa ou testosterona comprometida.',
+    sono:'Sono não restaurador é frequentemente o primeiro sinal de desequilíbrio hormonal.',
+    mente:'Névoa mental e dificuldade de foco se relacionam com tireoide, cortisol e testosterona.',
+    corpo:'Ganho de gordura visceral e perda muscular são marcadores diretos de desequilíbrio hormonal.',
+    humor:'Instabilidade emocional e ansiedade têm forte correlação com eixo hipotalâmico-hipofisário.',
+    recup:'Recuperação lenta pode indicar inflamação crônica ou deficiência de micronutrientes essenciais.',
+  };
+  return map[axId]||'Investigação pode revelar a causa.';
+}
+
+function animateNum(id,from,to,dur){
+  const el=document.getElementById(id);
+  const start=performance.now();
+  function step(now){
+    const p=Math.min((now-start)/dur,1);
+    const ease=1-Math.pow(1-p,3);
+    el.textContent=Math.round(from+(to-from)*ease);
+    el.style.color=valToColor(Math.round(from+(to-from)*ease));
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function redoAssess(){
+  scores={};answered=0;
+  show('s-assess');
+  // resetar sliders
+  AXES.forEach(ax=>ax.markers.forEach(m=>{
+    const sl=document.getElementById(`sl-${ax.id}-${m.id}`);
+    if(sl){sl.value=50;onSlider(ax.id,m.id,50,sl);}
+    const mv=document.getElementById(`mv-${ax.id}-${m.id}`);
+    if(mv){mv.textContent='—';mv.style.color='var(--muted)';}
+  }));
+  document.getElementById('live-score').textContent='0';
+  document.getElementById('prog').style.width='0%';
+  document.getElementById('btn-result').disabled=true;
+}
+
+// ══════════════════════════════════════════════
+// ROUTING
+// ══════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');});
+  const el=document.getElementById(id);
+  el.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+// ── Init ──
+(function init(){
+  const saved=loadName();
+  const hist=loadHistory();
+  if(saved&&hist.length){
+    // usuário retornando — pular direto para o assess
+    userName=saved;
+    userSex=localStorage.getItem('vm_sex')||'O';
+    document.getElementById('user-name').value=saved;
+    setSex(userSex);
+    document.getElementById('btn-go').disabled=false;
+  }
+  show('s-onboard');
+  renderAxes(); // pre-render silencioso
+})();
+</script>
+</body>
+</html>
